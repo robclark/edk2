@@ -225,6 +225,9 @@
 
   EmbeddedPkg/Universal/MmcDxe/MmcDxe.inf
 
+  # Applications
+  EmbeddedPkg/Application/ConfigTableLoader/DtbLoader.inf
+
   # Drivers
   EmbeddedPkg/Drivers/Lan9118Dxe/Lan9118Dxe.inf
   EmbeddedPkg/Drivers/SataSiI3132Dxe/SataSiI3132Dxe.inf
@@ -246,6 +249,7 @@
   EmbeddedPkg/Application/AndroidFastboot/AndroidFastbootApp.inf
   EmbeddedPkg/Drivers/AndroidFastbootTransportUsbDxe/FastbootTransportUsbDxe.inf
   EmbeddedPkg/Drivers/AndroidFastbootTransportTcpDxe/FastbootTransportTcpDxe.inf
+  EmbeddedPkg/Application/ConfigTableLoader/DtbLoader.inf
 
 [Components.IA32, Components.X64, Components.ARM]
   EmbeddedPkg/GdbStub/GdbStub.inf

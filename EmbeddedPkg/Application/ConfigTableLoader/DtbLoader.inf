@@ -1,0 +1,53 @@
+#/** @file
+#
+#  Copyright (c) 2013-2015, ARM Ltd. All rights reserved.<BR>
+#  Copyright (c) 2017, Linaro. All rights reserved.
+#
+#  This program and the accompanying materials
+#  are licensed and made available under the terms and conditions of the BSD License
+#  which accompanies this distribution. The full text of the license may be found at
+#  http://opensource.org/licenses/bsd-license.php
+#  THE PROGRAM IS DISTRIBUTED UNDER THE BSD LICENSE ON AN "AS IS" BASIS,
+#  WITHOUT WARRANTIES OR REPRESENTATIONS OF ANY KIND, EITHER EXPRESS OR IMPLIED.
+#
+#
+#**/
+
+[Defines]
+  INF_VERSION                    = 0x0001001b
+  BASE_NAME                      = DtbLoader
+  FILE_GUID                      = 45eaa15e-0160-4dc0-b288-c961df9c6265
+  MODULE_TYPE                    = UEFI_DRIVER
+  VERSION_STRING                 = 1.0
+  ENTRY_POINT                    = UefiMain
+
+#
+#  This flag specifies whether HII resource section is generated into PE image.
+#
+  UEFI_HII_RESOURCE_SECTION      = TRUE
+
+[Sources.common]
+  Common.c
+  DtbLoader.c
+
+[LibraryClasses]
+  BaseLib
+  UefiDriverEntryPoint
+  UefiBootServicesTableLib
+  UefiLib
+
+[Protocols]
+  gEfiSimpleFileSystemProtocolGuid
+  gEfiLoadedImageProtocolGuid
+
+[Packages]
+  EmbeddedPkg/EmbeddedPkg.dec
+  MdePkg/MdePkg.dec
+
+[Guids]
+  gEfiAcpiTableGuid
+  gEfiAcpi20TableGuid
+  gEfiFileInfoGuid
+  gFdtTableGuid
+
+[Pcd]
