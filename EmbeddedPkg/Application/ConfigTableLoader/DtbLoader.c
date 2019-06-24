@@ -15,6 +15,7 @@
 #include <Library/UefiLib.h>
 #include <Library/UefiApplicationEntryPoint.h>
 #include <Library/UefiBootServicesTableLib.h>
+#include <Library/UefiRuntimeServicesTableLib.h>
 
 #include <Guid/Fdt.h>
 #include <Guid/FileInfo.h>
