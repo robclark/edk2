@@ -14,6 +14,8 @@
 #include <Protocol/LoadedImage.h>
 #include <Protocol/SimpleFileSystem.h>
 
+#define Dbg(...) do { Print(__VA_ARGS__); gBS->Stall(100000); } while (0)
+
 /**
   Acquires a LOADED_IMAGE_PROTOCOL structure that points to the instance
   for the currently executing image.

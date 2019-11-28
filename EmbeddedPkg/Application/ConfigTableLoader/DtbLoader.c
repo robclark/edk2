@@ -11,6 +11,7 @@
 
 #include <libfdt.h>
 #include <Uefi.h>
+#include <Library/DebugLib.h>
 #include <Library/MemoryAllocationLib.h>
 #include <Library/UefiLib.h>
 #include <Library/UefiApplicationEntryPoint.h>
@@ -21,8 +22,6 @@
 #include <Guid/FileInfo.h>
 
 #include "Common.h"
-
-#define DTB_BLOB_NAME L"MY.DTB"
 
 STATIC struct {
   UINT32 Crc32;
@@ -97,6 +96,101 @@ ReadBlob (
  Cleanup:
   FreePool (FileInfo);
   Root->Close (File);
+  return Status;
+}
+
+/**
+  Construct a path string from an array of path components, and try to load
+  a dtb blob from that path.
+
+  The file path is constructed as (for example):
+
+     PathComponents[0] + "\" + ... + "\" + PathComponents[n] + "\" +
+     FileComponents[0] + "-" + ... + "-" + FileComponents[m] + ".dtb"
+
+**/
+STATIC
+EFI_STATUS
+TryLoadBlob (
+  IN     EFI_FILE_PROTOCOL *Root,
+  IN     CHAR16            **PathComponents,
+  IN     UINT32            PathComponentsLen,
+  IN     CHAR16            **FileComponents,
+  IN     UINT32            FileComponentsLen,
+  IN OUT VOID              **Blob
+  )
+{
+  CHAR16                          *BlobName;
+  UINTN                           BlobPathLength;
+  EFI_STATUS                      Status;
+
+  ASSERT (PathComponentsLen > 0);
+  ASSERT (FileComponentsLen > 0);
+
+  BlobPathLength = 1;  // terminating null
+
+  for (UINT32 i = 0; i < PathComponentsLen; i++) {
+    BlobPathLength += StrLen (PathComponents[i]);
+    BlobPathLength += 1; // +1 for '\'
+  }
+
+  for (UINT32 i = 0; i < FileComponentsLen; i++) {
+    BlobPathLength += StrLen (FileComponents[i]);
+    BlobPathLength += 1; // +1 for '\' or '.'
+  }
+
+  BlobPathLength += 3;  // for "dtb"
+
+  BlobName = AllocatePool (BlobPathLength * sizeof (CHAR16));
+  if (BlobName == NULL) {
+    Print (L"Memory allocation failed!\n");
+    return EFI_OUT_OF_RESOURCES;
+  }
+
+  BlobName[0] = L'\0';
+
+  for (UINT32 i = 0; i < PathComponentsLen; i++) {
+    Status = StrCatS (BlobName, BlobPathLength, PathComponents[i]);
+    if (EFI_ERROR (Status)) {
+      Print (L"%a:%d: Status = %x\n", __func__, __LINE__, Status);
+      goto Cleanup;
+    }
+    Status = StrCatS (BlobName, BlobPathLength, L"\\");
+    if (EFI_ERROR (Status)) {
+      Print (L"%a:%d: Status = %x\n", __func__, __LINE__, Status);
+      goto Cleanup;
+    }
+  }
+
+  for (UINT32 i = 0; i < FileComponentsLen; i++) {
+    if (i > 0) {
+      Status = StrCatS (BlobName, BlobPathLength, L"-");
+      if (EFI_ERROR (Status)) {
+        Print (L"%a:%d: Status = %x\n", __func__, __LINE__, Status);
+        goto Cleanup;
+      }
+    }
+    Status = StrCatS (BlobName, BlobPathLength, FileComponents[i]);
+    if (EFI_ERROR (Status)) {
+      Print (L"%a:%d: Status = %x\n", __func__, __LINE__, Status);
+      goto Cleanup;
+    }
+  }
+
+  Dbg (L"BlobName=%s\n", BlobName);
+
+  Status = StrCatS (BlobName, BlobPathLength, L".dtb");
+  if (EFI_ERROR (Status)) {
+    Print (L"%a:%d: Status = %x\n", __func__, __LINE__, Status);
+    goto Cleanup;
+  }
+
+  Dbg (L"Try to load: %s\n", BlobName);
+
+  Status = ReadBlob (Root, BlobName, Blob);
+
+ Cleanup:
+  FreePool (BlobName);
   return Status;
 }
 
@@ -176,12 +270,7 @@ UefiMain (
 {
   EFI_LOADED_IMAGE_PROTOCOL       *LoadedImage;
   EFI_SIMPLE_FILE_SYSTEM_PROTOCOL *FileSystem;
-  EFI_DEVICE_PATH_PROTOCOL        *ImagePath;
   EFI_FILE_PROTOCOL               *Root;
-  CHAR16                          *FileName;
-  CHAR16                          *TempString;
-  CHAR16                          *BlobName;
-  UINTN                           BlobPathLength;
   EFI_STATUS                      Status;
   VOID                            *Blob;
 
@@ -195,43 +284,19 @@ UefiMain (
     return Status;
   }
 
-  ImagePath = LoadedImage->FilePath;
-  FileName = (CHAR16 *)((UINTN)ImagePath + 4);
-
-  // Even paths to files in root directory start with '\'
-  TempString = StrRChr (FileName, L'\\');
-  if (TempString == NULL) {
-    Print (L"Invalid path for image: '%s'\n", FileName);
-    return EFI_UNSUPPORTED;
-  }
-
-  BlobPathLength = StrLen (DTB_BLOB_NAME);
-  BlobPathLength += TempString - FileName + 1; // + 1 for '\'
-  BlobPathLength += 1; // + 1 for '\0'
-
-  BlobName = AllocatePool (BlobPathLength * sizeof (CHAR16));
-  if (BlobName == NULL) {
-    Print (L"Memory allocation failed!\n");
-    return EFI_OUT_OF_RESOURCES;
-  }
-
-  Status = StrnCpyS (BlobName, BlobPathLength, FileName,
-		     TempString - FileName + 1);
-  if (EFI_ERROR (Status)) {
-    Print (L"Status = %x\n", Status);
-  }
-  Status = StrCatS (BlobName, BlobPathLength, DTB_BLOB_NAME);
-  if (EFI_ERROR (Status)) {
-    Print (L"Status = %x\n", Status);
-  }
-
   Status = FileSystem->OpenVolume (FileSystem, &Root);
   if (EFI_ERROR (Status)) {
     Print (L"OpenVolume call failed!\n");
     goto Cleanup;
   }
 
-  Status = ReadBlob (Root, BlobName, &Blob);
+  /* fallback to trying \MY.DTB: */
+  Status = TryLoadBlob (
+      Root,
+      &(CHAR16 *){ L"" }, 1,
+      &(CHAR16 *){ L"MY" }, 1,
+      &Blob
+      );
   if (!EFI_ERROR (Status)) {
     EFI_EVENT ExitBootServicesEvent;
 
@@ -256,7 +321,5 @@ UefiMain (
   }
 
  Cleanup:
-  FreePool (BlobName);
-
   return Status;
 }
