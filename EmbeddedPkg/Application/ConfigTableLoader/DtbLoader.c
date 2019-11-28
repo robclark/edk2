@@ -11,6 +11,7 @@
 
 #include <libfdt.h>
 #include <Uefi.h>
+#include <Library/DebugLib.h>
 #include <Library/MemoryAllocationLib.h>
 #include <Library/UefiLib.h>
 #include <Library/UefiApplicationEntryPoint.h>
@@ -18,87 +19,15 @@
 #include <Library/UefiRuntimeServicesTableLib.h>
 
 #include <Guid/Fdt.h>
-#include <Guid/FileInfo.h>
 
 #include "Common.h"
 
-#define DTB_BLOB_NAME L"MY.DTB"
-
 STATIC struct {
   UINT32 Crc32;
-  UINT32 FileSize;
   UINT32 TotalSize;
   VOID   *Data;
 } mBlobInfo;
 
-STATIC
-EFI_STATUS
-ReadBlob (
-  IN     EFI_FILE_PROTOCOL *Root,
-  IN     CHAR16            *Name,
-  IN OUT VOID              **Blob
-  )
-{
-  EFI_FILE_PROTOCOL *File;
-  EFI_STATUS        Status;
-  UINTN             BufferSize;
-  EFI_FILE_INFO     *FileInfo;
-
-  Status = Root->Open (Root, &File, Name, EFI_FILE_MODE_READ, 0);
-  if (EFI_ERROR (Status)) {
-    Print (L"Failed to open '%s'\n", Name);
-    return Status;
-  }
-
-  Print (L"File '%s' opened successfully!\n", Name);
-  BufferSize = 0;
-  Status = File->GetInfo (File, &gEfiFileInfoGuid, &BufferSize, NULL);
-
-  FileInfo = AllocatePool (BufferSize);
-  if (!FileInfo) {
-    Status = EFI_OUT_OF_RESOURCES;
-    goto Cleanup;
-  }
-
-  Status = File->GetInfo (File, &gEfiFileInfoGuid, &BufferSize, FileInfo);
-  Print (L"File size: %d bytes\n", FileInfo->FileSize);
-
-  // Don't bother loading the file if it's smaller than the DT header
-  if (FileInfo->FileSize < sizeof (struct fdt_header)) {
-    Print (L"'%s' is not a valid .dtb (too small) - not using!\n", Name);
-    Status = EFI_INVALID_PARAMETER;
-    goto Cleanup;
-  }
-
-  *Blob = AllocatePool (FileInfo->FileSize);
-  if (!*Blob) {
-    Status = EFI_OUT_OF_RESOURCES;
-    goto Cleanup;
-  }
-
-  Status = File->Read (File, &FileInfo->FileSize, *Blob);
-  if (EFI_ERROR (Status)) {
-    FreePool (*Blob);
-    goto Cleanup;
-  }
-
-  // Save DT info to detect changes.
-  gBS->CalculateCrc32 (*Blob, FileInfo->FileSize, &mBlobInfo.Crc32);
-  mBlobInfo.FileSize = FileInfo->FileSize;
-  mBlobInfo.TotalSize = fdt_totalsize (*Blob);
-  mBlobInfo.Data = *Blob;
-
-  Print (L"DT CRC32: %08x\n", mBlobInfo.Crc32);
-  Print (L"DT TotalSize: %d bytes\n", mBlobInfo.TotalSize);
-  if (mBlobInfo.FileSize < mBlobInfo.TotalSize) {
-    Print (L"Warning: File size (%d bytes) < TotalSize\n", mBlobInfo.FileSize);
-  }
-
- Cleanup:
-  FreePool (FileInfo);
-  Root->Close (File);
-  return Status;
-}
 
 STATIC
 EFI_STATUS
@@ -107,6 +36,17 @@ RegisterDtBlob (
   )
 {
   EFI_STATUS Status;
+
+  /* Calculate CRC to detect changes.  The linux kernel's efi libstub
+   * will insert the kernel commandline into the chosen node before
+   * calling ExitBootServices, and we can use this to differentiate
+   * between ACPI boot (ie. windows) and DT boot.
+   */
+  mBlobInfo.TotalSize = fdt_totalsize (mBlobInfo.Data);
+  gBS->CalculateCrc32 (mBlobInfo.Data, mBlobInfo.TotalSize, &mBlobInfo.Crc32);
+
+  Print (L"DT CRC32: %08x\n", mBlobInfo.Crc32);
+  Print (L"DT TotalSize: %d bytes\n", mBlobInfo.TotalSize);
 
   Status = gBS->InstallConfigurationTable (&gFdtTableGuid, Blob);
   if (!EFI_ERROR (Status)) {
@@ -176,12 +116,7 @@ UefiMain (
 {
   EFI_LOADED_IMAGE_PROTOCOL       *LoadedImage;
   EFI_SIMPLE_FILE_SYSTEM_PROTOCOL *FileSystem;
-  EFI_DEVICE_PATH_PROTOCOL        *ImagePath;
   EFI_FILE_PROTOCOL               *Root;
-  CHAR16                          *FileName;
-  CHAR16                          *TempString;
-  CHAR16                          *BlobName;
-  UINTN                           BlobPathLength;
   EFI_STATUS                      Status;
   VOID                            *Blob;
 
@@ -195,43 +130,14 @@ UefiMain (
     return Status;
   }
 
-  ImagePath = LoadedImage->FilePath;
-  FileName = (CHAR16 *)((UINTN)ImagePath + 4);
-
-  // Even paths to files in root directory start with '\'
-  TempString = StrRChr (FileName, L'\\');
-  if (TempString == NULL) {
-    Print (L"Invalid path for image: '%s'\n", FileName);
-    return EFI_UNSUPPORTED;
-  }
-
-  BlobPathLength = StrLen (DTB_BLOB_NAME);
-  BlobPathLength += TempString - FileName + 1; // + 1 for '\'
-  BlobPathLength += 1; // + 1 for '\0'
-
-  BlobName = AllocatePool (BlobPathLength * sizeof (CHAR16));
-  if (BlobName == NULL) {
-    Print (L"Memory allocation failed!\n");
-    return EFI_OUT_OF_RESOURCES;
-  }
-
-  Status = StrnCpyS (BlobName, BlobPathLength, FileName,
-		     TempString - FileName + 1);
-  if (EFI_ERROR (Status)) {
-    Print (L"Status = %x\n", Status);
-  }
-  Status = StrCatS (BlobName, BlobPathLength, DTB_BLOB_NAME);
-  if (EFI_ERROR (Status)) {
-    Print (L"Status = %x\n", Status);
-  }
-
   Status = FileSystem->OpenVolume (FileSystem, &Root);
   if (EFI_ERROR (Status)) {
     Print (L"OpenVolume call failed!\n");
     goto Cleanup;
   }
 
-  Status = ReadBlob (Root, BlobName, &Blob);
+  /* fallback to trying \MY.DTB: */
+  Status = ReadFdt (&Blob, Root, L"\\MY.dtb");
   if (!EFI_ERROR (Status)) {
     EFI_EVENT ExitBootServicesEvent;
 
@@ -256,7 +162,5 @@ UefiMain (
   }
 
  Cleanup:
-  FreePool (BlobName);
-
   return Status;
 }
