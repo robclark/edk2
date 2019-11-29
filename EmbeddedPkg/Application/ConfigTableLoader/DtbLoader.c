@@ -25,6 +25,7 @@
 #include <Guid/FileInfo.h>
 
 #include "Common.h"
+#include "Qcom.h"
 
 STATIC struct {
   UINT32 Crc32;
@@ -33,19 +34,7 @@ STATIC struct {
   VOID   *Data;
 } mBlobInfo;
 
-/*
- * These map to what linux prints at boot, when you see a string like:
- *
- *   DMI: LENOVO 81JL/LNVNB161216, BIOS ...
- *
- * We don't really care about the BIOS version information, but the
- * first part gives a reasonable way to pick a dtb.
- */
-STATIC struct {
-  CHAR16 *SysVendor;    /* System Information/Manufacturer */
-  CHAR16 *ProductName;  /* System Information/Product Name */
-  CHAR16 *BoardName;    /* Base Board Information/Product Name */
-} mSmbiosInfo;
+SMBIOS_INFO mSmbiosInfo;
 
 STATIC EFI_EVENT mSmbiosTableEvent;
 STATIC EFI_EVENT mSmbios3TableEvent;
@@ -270,7 +259,6 @@ ReadBlob (
      FileComponents[0] + "-" + ... + "-" + FileComponents[m] + ".dtb"
 
 **/
-STATIC
 EFI_STATUS
 TryLoadBlob (
   IN     EFI_FILE_PROTOCOL *Root,
@@ -490,6 +478,7 @@ LoadAndRegisterDtb (VOID)
     EFI_EVENT ExitBootServicesEvent;
 
     ResizeBlob (&Blob);
+    QcomDetectPanel (Root, Blob);
     RegisterDtBlob (Blob);
 
     Status = gBS->CreateEvent (
