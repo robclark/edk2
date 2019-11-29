@@ -162,6 +162,42 @@ ReadSmbiosInfo (VOID)
   return EFI_SUCCESS;
 }
 
+#define FDT_ADDITIONAL_SIZE 0x400
+
+/* Increase the size of the FDT blob so that we can patch in new nodes */
+STATIC
+EFI_STATUS
+ResizeBlob (
+  IN OUT VOID **Blob
+  )
+{
+  VOID  *NewBlob;
+  UINTN NewSize;
+  INTN  Err;
+
+  NewSize = fdt_totalsize (*Blob) + FDT_ADDITIONAL_SIZE;
+  NewBlob = AllocatePool (NewSize);
+  if (!NewBlob) {
+    Print (L"%a:%d: allocation failed\n", __func__, __LINE__);
+    return EFI_OUT_OF_RESOURCES;
+  }
+
+  Err = fdt_open_into (*Blob, NewBlob, NewSize);
+  if (Err) {
+    Print (L"Could not expand fdt: %a\n", fdt_strerror (Err));
+    FreePool (NewBlob);
+    return EFI_OUT_OF_RESOURCES;
+  }
+
+  /* Successfully Resized: */
+  mBlobInfo.Data = NewBlob;
+
+  FreePool (*Blob);
+  *Blob = NewBlob;
+
+  return EFI_SUCCESS;
+}
+
 STATIC
 EFI_STATUS
 RegisterDtBlob (
@@ -291,6 +327,7 @@ LoadAndRegisterDtb (VOID)
   if (!EFI_ERROR (Status)) {
     EFI_EVENT ExitBootServicesEvent;
 
+    ResizeBlob (&Blob);
     RegisterDtBlob (Blob);
 
     Status = gBS->CreateEvent (
