@@ -140,8 +140,6 @@ ReadSmbiosInfo (VOID)
     return EFI_NOT_FOUND;
 
   while (Smbios.Hdr->Type != 127) {
-    Dbg (L"Record: %d\n", Smbios.Hdr->Type);
-
     if (Smbios.Hdr->Type == SMBIOS_TYPE_SYSTEM_INFORMATION) {
       Type1Record = (SMBIOS_TABLE_TYPE1 *) Smbios.Raw;
       mSmbiosInfo.SysVendor = LibGetSmbiosString(&Smbios, Type1Record->Manufacturer);
@@ -216,16 +214,8 @@ ReadBlob (
   }
 
   // Save DT info to detect changes.
-  gBS->CalculateCrc32 (*Blob, FileInfo->FileSize, &mBlobInfo.Crc32);
   mBlobInfo.FileSize = FileInfo->FileSize;
-  mBlobInfo.TotalSize = fdt_totalsize (*Blob);
   mBlobInfo.Data = *Blob;
-
-  Print (L"DT CRC32: %08x\n", mBlobInfo.Crc32);
-  Print (L"DT TotalSize: %d bytes\n", mBlobInfo.TotalSize);
-  if (mBlobInfo.FileSize < mBlobInfo.TotalSize) {
-    Print (L"Warning: File size (%d bytes) < TotalSize\n", mBlobInfo.FileSize);
-  }
 
  Cleanup:
   FreePool (FileInfo);
@@ -311,8 +301,6 @@ TryLoadBlob (
     }
   }
 
-  Dbg (L"BlobName=%s\n", BlobName);
-
   Status = StrCatS (BlobName, BlobPathLength, L".dtb");
   if (EFI_ERROR (Status)) {
     Print (L"%a:%d: Status = %x\n", __func__, __LINE__, Status);
@@ -335,6 +323,21 @@ RegisterDtBlob (
   )
 {
   EFI_STATUS Status;
+
+  /* Calculate CRC to detect changes.  The linux kernel's efi libstub
+   * will insert the kernel commandline into the chosen node before
+   * calling ExitBootServices, and we can use this to differentiate
+   * between ACPI boot (ie. windows) and DT boot.
+   */
+  gBS->CalculateCrc32 (mBlobInfo.Data, mBlobInfo.FileSize, &mBlobInfo.Crc32);
+  mBlobInfo.TotalSize = fdt_totalsize (mBlobInfo.Data);
+
+  Print (L"DT CRC32: %08x\n", mBlobInfo.Crc32);
+  Print (L"DT TotalSize: %d bytes\n", mBlobInfo.TotalSize);
+  Print (L"DT FileSize: %d bytes\n", mBlobInfo.FileSize);
+  if (mBlobInfo.FileSize < mBlobInfo.TotalSize) {
+    Print (L"Warning: File size (%d bytes) < TotalSize\n", mBlobInfo.FileSize);
+  }
 
   Status = gBS->InstallConfigurationTable (&gFdtTableGuid, Blob);
   if (!EFI_ERROR (Status)) {
