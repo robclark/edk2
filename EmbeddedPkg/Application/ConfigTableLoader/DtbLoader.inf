@@ -42,10 +42,12 @@
 [Protocols]
   gEfiSimpleFileSystemProtocolGuid
   gEfiLoadedImageProtocolGuid
+  gEsrtManagementProtocolGuid
 
 [Packages]
   EmbeddedPkg/EmbeddedPkg.dec
   MdePkg/MdePkg.dec
+  MdeModulePkg/MdeModulePkg.dec
 
 [Guids]
   gEfiAcpiTableGuid

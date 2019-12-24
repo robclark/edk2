@@ -24,6 +24,9 @@
 #include <Guid/Fdt.h>
 #include <Guid/FileInfo.h>
 
+#include <Protocol/EsrtManagement.h>
+#include <Guid/SystemResourceTable.h>
+
 #include "Common.h"
 #include "Qcom.h"
 
@@ -38,6 +41,26 @@ SMBIOS_INFO mSmbiosInfo;
 
 STATIC EFI_EVENT mSmbiosTableEvent;
 STATIC EFI_EVENT mSmbios3TableEvent;
+
+/* strawman: use version #'s that match linux kernel from which the dtb
+ * files came?  Alternatively we could use 3 components, like:
+ *
+ *   $dtbver . $kernel_major . $kernel_minor
+ *
+ * so that updates to DtbLoader itself take precedence?
+ *
+ * XXX actually fwupdmgr shows version as 0.5.4, so I guess it is interpreting
+ * as XX.YY.ZZZZ...
+ */
+#define DTB_LOADER_VERSION(major, minor) (((major) << 16) | (minor))
+
+STATIC EFI_SYSTEM_RESOURCE_ENTRY mSystemResourceEntry = {
+    .FwClass = {0x45eaa15e, 0x0160, 0x4dc0, {0xb2, 0x88, 0xc9, 0x61, 0xdf, 0x9c, 0x62, 0x65}},
+    .FwType = ESRT_FW_TYPE_UEFIDRIVER,
+    .FwVersion = DTB_LOADER_VERSION(5, 4),
+    .LowestSupportedFwVersion = 0, // XXX
+    .CapsuleFlags = 0, // XXX
+};
 
 // HACK, why do I need this?
 EFI_GUID gEfiSmbios3TableGuid = { 0xF2FD1544, 0x9794, 0x4A2C, { 0x99, 0x2E, 0xE5, 0xBB, 0xCF, 0x20, 0xE3, 0x94 }};
@@ -524,6 +547,44 @@ OnSmbiosTablesRegistered (
   }
 }
 
+STATIC
+EFI_STATUS
+UpdateEsrtEntry (VOID)
+{
+  ESRT_MANAGEMENT_PROTOCOL *EsrtManagement;
+  EFI_STATUS Status;
+
+  Dbg (L"Locate Protocol\n");
+
+  Status = gBS->LocateProtocol(&gEsrtManagementProtocolGuid, NULL, (VOID **)&EsrtManagement);
+  if (EFI_ERROR (Status)) {
+    Print (L"Failed to locate ESRT_MANAGEMENT_PROTOCOL! %llx\n", Status);
+    return Status;
+  }
+
+  Dbg (L"Register ESRT\n");
+
+  /* RegisterEsrtEntry() doesn't seem to do anything if there is already
+   * an entry installed.. and UpdateEsrtEntry() doesn't seem to do anything
+   * if there *isn't* already an entry.. so maybe we have to do both?
+   */
+  Status = EsrtManagement->RegisterEsrtEntry(&mSystemResourceEntry);
+  if (EFI_ERROR (Status)) {
+    Print (L"Failed to register EFI_SYSTEM_RESOURCE_ENTRY! %llx\n", Status);
+    return Status;
+  }
+
+  Dbg (L"Update ESRT\n");
+
+  Status = EsrtManagement->UpdateEsrtEntry(&mSystemResourceEntry);
+  if (EFI_ERROR (Status)) {
+    Print (L"Failed to register EFI_SYSTEM_RESOURCE_ENTRY! %llx\n", Status);
+    return Status;
+  }
+
+  return Status;
+}
+
 /**
   The user Entry Point for Application. The user code starts with this function
   as the real entry point for the application.
@@ -543,6 +604,8 @@ UefiMain (
   )
 {
   EFI_STATUS Status;
+
+  UpdateEsrtEntry();
 
   if (GetSmbiosTable()) {
     /* already got SMBIOS tables configured, so just go: */
