@@ -250,6 +250,7 @@
   EmbeddedPkg/Drivers/AndroidFastbootTransportUsbDxe/FastbootTransportUsbDxe.inf
   EmbeddedPkg/Drivers/AndroidFastbootTransportTcpDxe/FastbootTransportTcpDxe.inf
   EmbeddedPkg/Application/ConfigTableLoader/DtbLoader.inf
+  EmbeddedPkg/Application/ConfigTableLoader/DtbLoaderUpdate.inf
 
 [Components.IA32, Components.X64, Components.ARM]
   EmbeddedPkg/GdbStub/GdbStub.inf
