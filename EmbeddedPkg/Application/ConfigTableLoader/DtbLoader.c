@@ -247,7 +247,7 @@ LoadAndRegisterDtb (VOID)
     EFI_EVENT ExitBootServicesEvent;
 
     ResizeBlob (&Blob);
-    QcomDetectPanel (Root, Blob);
+    QcomDetectPanel (Root, Blob, CurrentCHID);
     RegisterDtBlob (Blob);
 
     Status = gBS->CreateEvent (

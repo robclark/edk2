@@ -9,12 +9,14 @@
 #include <libfdt.h>
 #include <Uefi.h>
 #include <Library/BaseLib.h>
+#include <Library/DebugLib.h>
 #include <Library/MemoryAllocationLib.h>
 #include <Library/PrintLib.h>
 #include <Library/UefiLib.h>
 #include <Library/UefiBootServicesTableLib.h>
 
 #include "Common.h"
+#include "Qcom.h"
 
 /*
  * We (at least currently) don't care about most of the fields, just
@@ -37,45 +39,41 @@ EFI_STATUS
 QcomLoadPanelOverlay(
   IN EFI_FILE_PROTOCOL *Root,
   IN VOID              *Blob,
+  IN CHID              CurrentCHID,
   IN UINT32            PanelId
   )
 {
   EFI_STATUS Status;
+  EFI_GUID   CHID;
   VOID       *OverlayBlob;
   INT32      Err;
 
-  /* First try \dtb\$SysVendor\$ProductName-$BoardName-panel-$PanelId.dtb */
-  Status = ReadFdt (
-      &OverlayBlob,
-      Root,
-      L"\\dtb\\%s\\%s-%s-panel-%x.dtb",
-      mSmbiosInfo.Manufacturer,
-      mSmbiosInfo.ProductName,
-      mSmbiosInfo.BaseboardProduct,
-      PanelId
-      );
-  if (EFI_ERROR (Status)) {
-    /* Then try \dtb\$SysVendor\$ProductName-panel-$PanelId.dtb */
-    Status = ReadFdt (
-        &OverlayBlob,
-        Root,
-        L"\\dtb\\%s\\%s-panel-%x.dtb",
-        mSmbiosInfo.Manufacturer,
-        mSmbiosInfo.ProductName,
-        PanelId
-        );
-  }
+  Status = GetComputerHardwareId(&CHID, CurrentCHID);
+  ASSERT (!EFI_ERROR (Status));
 
+  /* First try \dtb\%g-panel-%x.dtb, using the CHID that was used to find
+   * the in-used fdt, ie. if main .dtb is:
+   *
+   *    \dtb\30b031c0-9de7-5d31-a61c-dee772871b7d.dtb
+   *
+   * Then the first path we try is:
+   *
+   *    \dtb\30b031c0-9de7-5d31-a61c-dee772871b7d-panel-$PanelId.dtb
+   *
+   * This should probably never be required, but in case a panel-id does
+   * get re-cycled between different products, this lets us first interpret
+   * the panel specific to the device, but considering the global namespace:
+   */
+  Status = ReadFdt (&OverlayBlob, Root, L"\\dtb\\%g-panel-%x.dtb", &CHID, PanelId);
   if (EFI_ERROR (Status)) {
-    /* Finally try \dtb\panels\panel-$PanelId.dtb ... This is where we expect
+    /* Then try \dtb\qcom-panels\panel-$PanelId.dtb ... This is where we expect
      * to normally find the panel, since the panel-id's seem to be a flat/global
-     * namespace.  The earlier attempts are just to provide an override mechanism
-     * in case we later discover that a panel-id has been reused
+     * namespace.
      */
     Status = ReadFdt (
         &OverlayBlob,
         Root,
-        L"\\dtb\\panels\\panel-%x.dtb",
+        L"\\dtb\\qcom-panels\\panel-%x.dtb",
         PanelId
         );
   }
@@ -101,17 +99,21 @@ QcomLoadPanelOverlay(
   Detect (if present) the qcom specific UEFIDisplayInfo variable, adjust dtb
   accordingly
 
-  @param[in] Blob  The fdt blob to patch if panel id is detected
+  @param[in] Root         The root of filesys that Blob was loaded from (ie.
+                          where to look for overlays)
+  @param[in] Blob         The fdt blob to patch if panel id is detected
+  @param[in] CurrentCHID  The CHID used to construct path that blob was loaded
+                          from
 
   @retval EFI_SUCCESS          The panel was detected and dt patched successfully.
   @retval other                Error.
-
 **/
 EFI_STATUS
 EFIAPI
 QcomDetectPanel (
   IN EFI_FILE_PROTOCOL *Root,
-  IN VOID              *Blob
+  IN VOID              *Blob,
+  IN CHID              CurrentCHID
   )
 {
   EFI_STATUS    Status;
@@ -138,7 +140,7 @@ QcomDetectPanel (
 
   Dbg (L"Got PanelId: 0x%x\n", DispInfo->PanelId);
 
-  Status = QcomLoadPanelOverlay (Root, Blob, DispInfo->PanelId);
+  Status = QcomLoadPanelOverlay (Root, Blob, CurrentCHID, DispInfo->PanelId);
 
  Cleanup:
   FreePool (DispInfo);
