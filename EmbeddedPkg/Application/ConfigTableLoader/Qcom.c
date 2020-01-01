@@ -49,9 +49,9 @@ QcomLoadPanelOverlay(
       &OverlayBlob,
       Root,
       L"\\dtb\\%s\\%s-%s-panel-%x.dtb",
-      mSmbiosInfo.SysVendor,
+      mSmbiosInfo.Manufacturer,
       mSmbiosInfo.ProductName,
-      mSmbiosInfo.BoardName,
+      mSmbiosInfo.BaseboardProduct,
       PanelId
       );
   if (EFI_ERROR (Status)) {
@@ -60,7 +60,7 @@ QcomLoadPanelOverlay(
         &OverlayBlob,
         Root,
         L"\\dtb\\%s\\%s-panel-%x.dtb",
-        mSmbiosInfo.SysVendor,
+        mSmbiosInfo.Manufacturer,
         mSmbiosInfo.ProductName,
         PanelId
         );

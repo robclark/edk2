@@ -139,6 +139,35 @@ ExitBootServicesHook (
   gBS->InstallConfigurationTable (&gEfiAcpi20TableGuid, NULL);
 }
 
+/////////////////////////////////////////////////////////////////
+STATIC
+VOID
+PrintChid (VOID)
+{
+  EFI_STATUS Status;
+  EFI_GUID   CHID;
+
+#define DumpCHID(__chid) do {                              \
+    Status = GetComputerHardwareId(&CHID, __chid);         \
+    if (!EFI_ERROR (Status)) {                             \
+      Print (L"{%g}   <- %a\n", &CHID, #__chid);           \
+    }                                                      \
+  } while (0)
+
+  DumpCHID(CHID_3);
+  DumpCHID(CHID_4);
+  DumpCHID(CHID_5);
+  DumpCHID(CHID_6);
+  DumpCHID(CHID_7);
+  DumpCHID(CHID_8);
+  DumpCHID(CHID_9);
+  DumpCHID(CHID_10);
+  DumpCHID(CHID_11);
+  DumpCHID(CHID_13);
+  DumpCHID(CHID_14);
+}
+/////////////////////////////////////////////////////////////////
+
 STATIC
 EFI_STATUS
 LoadAndRegisterDtb (VOID)
@@ -167,6 +196,8 @@ LoadAndRegisterDtb (VOID)
     goto Cleanup;
   }
 
+  PrintChid();
+
   Status = FileSystem->OpenVolume (FileSystem, &Root);
   if (EFI_ERROR (Status)) {
     Print (L"OpenVolume call failed!\n");
@@ -178,9 +209,9 @@ LoadAndRegisterDtb (VOID)
       &Blob,
       Root,
       L"\\dtb\\%s\\%s-%s.dtb",
-      mSmbiosInfo.SysVendor,
+      mSmbiosInfo.Manufacturer,
       mSmbiosInfo.ProductName,
-      mSmbiosInfo.BoardName
+      mSmbiosInfo.BaseboardProduct
       );
   if (EFI_ERROR (Status)) {
     /* Then fallback to \dtb\$SysVendor\$ProductName.dtb */
@@ -188,7 +219,7 @@ LoadAndRegisterDtb (VOID)
         &Blob,
         Root,
         L"\\dtb\\%s\\%s.dtb",
-        mSmbiosInfo.SysVendor,
+        mSmbiosInfo.Manufacturer,
         mSmbiosInfo.ProductName
         );
   }
