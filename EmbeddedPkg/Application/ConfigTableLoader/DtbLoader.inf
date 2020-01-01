@@ -27,12 +27,14 @@
   UEFI_HII_RESOURCE_SECTION      = TRUE
 
 [Sources.common]
+  CHID.c
   Common.c
   DtbLoader.c
   Qcom.c
 
 [LibraryClasses]
   BaseLib
+  BaseCryptLib
   FdtLib
   UefiDriverEntryPoint
   UefiBootServicesTableLib
@@ -46,6 +48,7 @@
 [Packages]
   EmbeddedPkg/EmbeddedPkg.dec
   MdePkg/MdePkg.dec
+  CryptoPkg/CryptoPkg.dec
 
 [Guids]
   gEfiAcpiTableGuid
