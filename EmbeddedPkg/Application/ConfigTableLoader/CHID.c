@@ -23,7 +23,22 @@
 #include "CHID.h"
 #include "Common.h"
 
-SMBIOS_INFO mSmbiosInfo;
+/*
+ * These map to what linux prints at boot, when you see a string like:
+ *
+ *   DMI: LENOVO 81JL/LNVNB161216, BIOS ...
+ *
+ * We don't really care about the BIOS version information, but the
+ * first part gives a reasonable way to pick a dtb.
+ */
+STATIC struct {
+  CHAR16 *Manufacturer;           /* System Information/Manufacturer */
+  CHAR16 *ProductName;            /* System Information/Product Name */
+  CHAR16 *ProductSku;             /* System Information/SKU Number */
+  CHAR16 *Family;                 /* System Information/Family */
+  CHAR16 *BaseboardProduct;       /* Base Board Information/Product Name */
+  CHAR16 *BaseboardManufacturer;  /* Base Board Information/Manufacturer */
+} mSmbiosInfo;
 
 // HACK, why do I need this?
 EFI_GUID gEfiSmbios3TableGuid = { 0xF2FD1544, 0x9794, 0x4A2C, { 0x99, 0x2E, 0xE5, 0xBB, 0xCF, 0x20, 0xE3, 0x94 }};
