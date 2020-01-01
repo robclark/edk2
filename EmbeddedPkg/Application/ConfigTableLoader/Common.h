@@ -27,9 +27,12 @@
  * first part gives a reasonable way to pick a dtb.
  */
 typedef struct {
-  CHAR16 *SysVendor;    /* System Information/Manufacturer */
-  CHAR16 *ProductName;  /* System Information/Product Name */
-  CHAR16 *BoardName;    /* Base Board Information/Product Name */
+  CHAR16 *Manufacturer;           /* System Information/Manufacturer */
+  CHAR16 *ProductName;            /* System Information/Product Name */
+  CHAR16 *ProductSku;             /* System Information/SKU Number */
+  CHAR16 *Family;                 /* System Information/Family */
+  CHAR16 *BaseboardProduct;       /* Base Board Information/Product Name */
+  CHAR16 *BaseboardManufacturer;  /* Base Board Information/Manufacturer */
 } SMBIOS_INFO;
 
 extern SMBIOS_INFO mSmbiosInfo;
