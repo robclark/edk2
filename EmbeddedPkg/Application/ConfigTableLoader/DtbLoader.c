@@ -168,6 +168,22 @@ PrintChid (VOID)
 }
 /////////////////////////////////////////////////////////////////
 
+/**
+  Rough attempt to sort in order from most specfic to least, omitting
+  ones that are too generic to be plausible, or are not supported yet
+ */
+STATIC CHID PrioritizedCHIDs[] = {
+    CHID_3,      // Manufacturer + Family + ProductName + ProductSku + BaseboardManufacturer + BaseboardProduct
+    CHID_6,      // Manufacturer + ProductSku + BaseboardManufacturer + BaseboardProduct
+    CHID_8,      // Manufacturer + ProductName + BaseboardManufacturer + BaseboardProduct
+    CHID_10,     // Manufacturer + Family + BaseboardManufacturer + BaseboardProduct
+    CHID_4,      // Manufacturer + Family + ProductName + ProductSku
+    CHID_5,      // Manufacturer + Family + ProductName
+    CHID_7,      // Manufacturer + ProductSku
+    CHID_9,      // Manufacturer + ProductName
+    CHID_11,     // Manufacturer + Family
+};
+
 STATIC
 EFI_STATUS
 LoadAndRegisterDtb (VOID)
@@ -177,6 +193,8 @@ LoadAndRegisterDtb (VOID)
   EFI_FILE_PROTOCOL               *Root;
   EFI_STATUS                      Status;
   VOID                            *Blob;
+  UINT32                          Index;
+  CHID                            CurrentCHID;
 
   Dbg (L"LoadAndRegisterDtb\n");
 
@@ -204,24 +222,19 @@ LoadAndRegisterDtb (VOID)
     goto Cleanup;
   }
 
-  /* First try \dtb\$SysVendor\$ProductName-$BoardName.dtb */
-  Status = ReadFdt (
-      &Blob,
-      Root,
-      L"\\dtb\\%s\\%s-%s.dtb",
-      mSmbiosInfo.Manufacturer,
-      mSmbiosInfo.ProductName,
-      mSmbiosInfo.BaseboardProduct
-      );
-  if (EFI_ERROR (Status)) {
-    /* Then fallback to \dtb\$SysVendor\$ProductName.dtb */
-    Status = ReadFdt (
-        &Blob,
-        Root,
-        L"\\dtb\\%s\\%s.dtb",
-        mSmbiosInfo.Manufacturer,
-        mSmbiosInfo.ProductName
-        );
+  /* Try finding a matching .dtb based on prioritized list of hw-id's: */
+  for (Index = 0; Index < ARRAY_SIZE(PrioritizedCHIDs); Index++) {
+    EFI_GUID CHID;
+
+    CurrentCHID = PrioritizedCHIDs[Index];
+
+    Status = GetComputerHardwareId(&CHID, CurrentCHID);
+    if (EFI_ERROR (Status))
+      continue;
+
+    Status = ReadFdt (&Blob, Root, L"\\dtb\\%g.dtb", &CHID);
+    if (!EFI_ERROR (Status))
+      break;
   }
 
   if (EFI_ERROR (Status)) {
@@ -229,6 +242,7 @@ LoadAndRegisterDtb (VOID)
     // TODO should we try this first, as a convenient way to override default dtb for devel??
     Status = ReadFdt (&Blob, Root, L"\\MY.dtb");
   }
+
   if (!EFI_ERROR (Status)) {
     EFI_EVENT ExitBootServicesEvent;
 
