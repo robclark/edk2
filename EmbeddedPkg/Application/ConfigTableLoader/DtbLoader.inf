@@ -29,6 +29,7 @@
 [Sources.common]
   Common.c
   DtbLoader.c
+  Qcom.c
 
 [LibraryClasses]
   BaseLib

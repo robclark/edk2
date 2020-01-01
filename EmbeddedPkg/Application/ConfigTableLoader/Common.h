@@ -18,6 +18,22 @@
 
 #define Dbg(...) do { Print(__VA_ARGS__); gBS->Stall(100000); } while (0)
 
+/*
+ * These map to what linux prints at boot, when you see a string like:
+ *
+ *   DMI: LENOVO 81JL/LNVNB161216, BIOS ...
+ *
+ * We don't really care about the BIOS version information, but the
+ * first part gives a reasonable way to pick a dtb.
+ */
+typedef struct {
+  CHAR16 *SysVendor;    /* System Information/Manufacturer */
+  CHAR16 *ProductName;  /* System Information/Product Name */
+  CHAR16 *BoardName;    /* Base Board Information/Product Name */
+} SMBIOS_INFO;
+
+extern SMBIOS_INFO mSmbiosInfo;
+
 /**
   Acquires a LOADED_IMAGE_PROTOCOL structure that points to the instance
   for the currently executing image.
@@ -83,5 +99,4 @@ ReadFdt (
   IN CONST CHAR16            *Format,
   ...
   );
-
 #endif /* COMMON_H_ */
